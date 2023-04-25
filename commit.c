@@ -97,6 +97,7 @@ struct commit *lookup_commit_reference_by_name(const char *name)
 static timestamp_t parse_commit_date(const char *buf, const char *tail)
 {
 	const char *dateptr;
+	const char *eol;
 
 	if (buf + 6 >= tail)
 		return 0;
@@ -108,16 +109,46 @@ static timestamp_t parse_commit_date(const char *buf, const char *tail)
 		return 0;
 	if (memcmp(buf, "committer", 9))
 		return 0;
-	while (buf < tail && *buf++ != '>')
-		/* nada */;
-	if (buf >= tail)
+
+	/*
+	 * Jump to end-of-line so that we can walk backwards to find the
+	 * end-of-email ">". This is more forgiving of malformed cases
+	 * because unexpected characters tend to be in the name and email
+	 * fields.
+	 */
+	eol = memchr(buf, '\n', tail - buf);
+	if (!eol)
 		return 0;
-	dateptr = buf;
-	while (buf < tail && *buf++ != '\n')
-		/* nada */;
-	if (buf >= tail)
+	dateptr = eol;
+	while (dateptr > buf && dateptr[-1] != '>')
+		dateptr--;
+	if (dateptr == buf)
 		return 0;
-	/* dateptr < buf && buf[-1] == '\n', so parsing will stop at buf-1 */
+
+	/*
+	 * Trim leading whitespace; parse_timestamp() will do this itself, but
+	 * if we have _only_ whitespace, it will walk right past the newline
+	 * while doing so.
+	 */
+	while (dateptr < eol && isspace(*dateptr))
+		dateptr++;
+	if (dateptr == eol)
+		return 0;
+
+	/*
+	 * We know there is at least one non-whitespace character, so we'll
+	 * begin parsing there and stop at worst case at eol.
+	 *
+	 * Note that we may feed parse_timestamp() non-digit garbage here if
+	 * the commit is malformed. If we see a totally unexpected token like
+	 * "foo" here, it will return 0, which is our error/sentinel value
+	 * anyway. For something like "123foo456", it will parse as far as it
+	 * can. That might be questionable (versus returning "0"), but it would
+	 * help in a hypothetical case like "123456+0100", where the whitespace
+	 * from the timezone is missing. Since such syntactic errors may be
+	 * baked into history and hard to correct now, let's err on trying to
+	 * make our best guess here, rather than insist on perfect syntax.
+	 */
 	return parse_timestamp(dateptr, NULL, 10);
 }
 
