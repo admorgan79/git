@@ -116,10 +116,23 @@ static timestamp_t parse_commit_date(const char *buf, const char *tail)
 	dateptr = eol;
 	while (dateptr > buf && dateptr[-1] != '>')
 		dateptr--;
-	if (dateptr == buf || dateptr == eol)
+	if (dateptr == buf)
 		return 0;
 
-	/* dateptr < eol && *eol == '\n', so parsing will stop at eol */
+	/*
+	 * Trim leading whitespace; parse_timestamp() will do this itself, but
+	 * if we have _only_ whitespace, it will walk right past the newline
+	 * while doing so.
+	 */
+	while (dateptr < eol && isspace(*dateptr))
+		dateptr++;
+	if (dateptr == eol)
+		return 0;
+
+	/*
+	 * We know there is at least one non-whitespace character, so we'll
+	 * begin parsing there and stop at worst case at eol.
+	 */
 	return parse_timestamp(dateptr, NULL, 10);
 }
 

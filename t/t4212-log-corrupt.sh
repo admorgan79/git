@@ -92,4 +92,33 @@ test_expect_success 'absurdly far-in-future date' '
 	git log -1 --format=%ad $commit
 '
 
+test_expect_success 'create commit with whitespace committer date' '
+	# It is important that this subject line is numeric, since we want to
+	# be sure we are not confused by skipping whitespace and accidentally
+	# parsing the subject as a timestamp.
+	#
+	# Do not use munge_author_date here. Besides not hitting the committer
+	# line, it leaves the timezone intact, and we want nothing but
+	# whitespace.
+	test_commit 1234567890 &&
+	git cat-file commit HEAD >commit.orig &&
+	sed "s/>.*/>    /" <commit.orig >commit.munge &&
+	ws_commit=$(git hash-object --literally -w -t commit commit.munge)
+'
+
+test_expect_success '--until treats whitespace date as sentinel' '
+	echo $ws_commit >expect &&
+	git rev-list --until=1980-01-01 $ws_commit >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'pretty-printer handles whitespace date' '
+	# as with the %ad test above, we will show these as the empty string,
+	# not the 1970 epoch date. This is intentional; see 7d9a281941 (t4212:
+	# test bogus timestamps with git-log, 2014-02-24) for more discussion.
+	echo : >expect &&
+	git log -1 --format="%at:%ct" $ws_commit >actual &&
+	test_cmp expect actual
+'
+
 test_done
