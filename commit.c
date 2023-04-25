@@ -132,6 +132,16 @@ static timestamp_t parse_commit_date(const char *buf, const char *tail)
 	/*
 	 * We know there is at least one non-whitespace character, so we'll
 	 * begin parsing there and stop at worst case at eol.
+	 *
+	 * Note that we may feed parse_timestamp() non-digit garbage here if
+	 * the commit is malformed. If we see a totally unexpected token like
+	 * "foo" here, it will return 0, which is our error/sentinel value
+	 * anyway. For something like "123foo456", it will parse as far as it
+	 * can. That might be questionable (versus returning "0"), but it would
+	 * help in a hypothetical case like "123456+0100", where the whitespace
+	 * from the timezone is missing. Since such syntactic errors may be
+	 * baked into history and hard to correct now, let's err on trying to
+	 * make our best guess here, rather than insist on perfect syntax.
 	 */
 	return parse_timestamp(dateptr, NULL, 10);
 }
